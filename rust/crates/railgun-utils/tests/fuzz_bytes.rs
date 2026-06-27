@@ -7,8 +7,11 @@ use railgun_utils::*;
 use serde::Deserialize;
 
 fn load(name: &str) -> serde_json::Value {
-    let path = format!("{}/../../vectors/{}", env!("CARGO_MANIFEST_DIR"), name);
-    let bytes = std::fs::read(&path).unwrap_or_else(|_| panic!("missing corpus {path}; run the oracle generator"));
+    let dir = std::env::var("RAILGUN_VECTORS_DIR")
+        .unwrap_or_else(|_| format!("{}/../../vectors", env!("CARGO_MANIFEST_DIR")));
+    let path = format!("{dir}/{name}");
+    let bytes = std::fs::read(&path)
+        .unwrap_or_else(|_| panic!("missing corpus {path}; run the oracle generator"));
     serde_json::from_slice(&bytes).unwrap()
 }
 fn from<T: for<'de> Deserialize<'de>>(v: &serde_json::Value, key: &str) -> Vec<T> {
@@ -118,39 +121,82 @@ fn fuzz_bytes_against_ts_oracle() {
 
     for c in from::<HexlifyBytes>(&v, "hexlifyBytes") {
         let bytes = hex::decode(&c.input).unwrap();
-        assert_eq!(hexlify(&BytesData::Bytes(bytes), c.prefix), c.out, "hexlify(bytes {})", c.input);
+        assert_eq!(
+            hexlify(&BytesData::Bytes(bytes), c.prefix),
+            c.out,
+            "hexlify(bytes {})",
+            c.input
+        );
     }
     for c in from::<HexlifyBig>(&v, "hexlifyBigint") {
-        assert_eq!(hexlify(&BytesData::Big(dec(&c.input)), c.prefix), c.out, "hexlify(bigint {})", c.input);
+        assert_eq!(
+            hexlify(&BytesData::Big(dec(&c.input)), c.prefix),
+            c.out,
+            "hexlify(bigint {})",
+            c.input
+        );
     }
     for c in from::<Arrayify>(&v, "arrayify") {
         let out = arrayify(&BytesData::Hex(c.input.clone())).unwrap();
         assert_eq!(hex::encode(out), c.out, "arrayify({})", c.input);
     }
     for c in from::<NToHex>(&v, "nToHex") {
-        assert_eq!(n_to_hex(&dec(&c.input), byte_length(c.byte_length), c.prefix), c.out, "nToHex({}, {})", c.input, c.byte_length);
+        assert_eq!(
+            n_to_hex(&dec(&c.input), byte_length(c.byte_length), c.prefix),
+            c.out,
+            "nToHex({}, {})",
+            c.input,
+            c.byte_length
+        );
     }
     for c in from::<FormatToByteLength>(&v, "formatToByteLength") {
-        assert_eq!(format_to_byte_length(&BytesData::Hex(c.input.clone()), byte_length(c.byte_length), c.prefix), c.out, "formatToByteLength({})", c.input);
+        assert_eq!(
+            format_to_byte_length(
+                &BytesData::Hex(c.input.clone()),
+                byte_length(c.byte_length),
+                c.prefix
+            ),
+            c.out,
+            "formatToByteLength({})",
+            c.input
+        );
     }
     for c in from::<PadToLength>(&v, "padToLength") {
-        let Padded::Hex(out) = pad_to_length(&BytesData::Hex(c.input.clone()), c.length, side(&c.side)) else {
+        let Padded::Hex(out) =
+            pad_to_length(&BytesData::Hex(c.input.clone()), c.length, side(&c.side))
+        else {
             panic!("expected hex padding");
         };
-        assert_eq!(out, c.out, "padToLength({}, {}, {})", c.input, c.length, c.side);
+        assert_eq!(
+            out, c.out,
+            "padToLength({}, {}, {})",
+            c.input, c.length, c.side
+        );
     }
     for c in from::<Trim>(&v, "trim") {
-        let Trimmed::Hex(out) = trim(&BytesData::Hex(c.input.clone()), c.length, side(&c.side)) else {
+        let Trimmed::Hex(out) = trim(&BytesData::Hex(c.input.clone()), c.length, side(&c.side))
+        else {
             panic!("expected hex trim");
         };
         assert_eq!(out, c.out, "trim({}, {}, {})", c.input, c.length, c.side);
     }
     for c in from::<ChunkCombine>(&v, "chunkCombine") {
-        assert_eq!(chunk(&BytesData::Hex(c.input.clone()), c.size), c.chunks, "chunk({}, {})", c.input, c.size);
+        assert_eq!(
+            chunk(&BytesData::Hex(c.input.clone()), c.size),
+            c.chunks,
+            "chunk({}, {})",
+            c.input,
+            c.size
+        );
         assert_eq!(combine(&c.chunks), c.combined, "combine");
     }
     for c in from::<HexToBig>(&v, "hexToBigint") {
-        assert_eq!(hex_to_bigint(&c.input), dec(&c.out), "hexToBigInt({})", c.input);
+        assert_eq!(
+            hex_to_bigint(&c.input),
+            dec(&c.out),
+            "hexToBigInt({})",
+            c.input
+        );
     }
     for c in from::<HexToBig>(&v, "bytesToN") {
         let bytes = hex::decode(&c.input).unwrap();

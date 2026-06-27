@@ -406,7 +406,11 @@ mod tests {
     }
     fn convert_vectors() -> Vec<ConvertVector> {
         vec![
-            ConvertVector { hex: "0138bc", array: vec![1, 56, 188], number: big10("80060") },
+            ConvertVector {
+                hex: "0138bc",
+                array: vec![1, 56, 188],
+                number: big10("80060"),
+            },
             ConvertVector {
                 hex: "5241494c47554e",
                 array: vec![82, 65, 73, 76, 71, 85, 78],
@@ -414,7 +418,9 @@ mod tests {
             },
             ConvertVector {
                 hex: "50524956414359202620414e4f4e594d495459",
-                array: vec![80, 82, 73, 86, 65, 67, 89, 32, 38, 32, 65, 78, 79, 78, 89, 77, 73, 84, 89],
+                array: vec![
+                    80, 82, 73, 86, 65, 67, 89, 32, 38, 32, 65, 78, 79, 78, 89, 77, 73, 84, 89,
+                ],
                 number: big10("1791227778594112336062762560780788585783186521"),
             },
         ]
@@ -434,9 +440,15 @@ mod tests {
             assert_eq!(hexlify(&v.hex.into(), false), v.hex);
             assert_eq!(hexlify(&v.hex.into(), true), format!("0x{}", v.hex));
             assert_eq!(hexlify(&BytesData::Bytes(v.array.clone()), false), v.hex);
-            assert_eq!(hexlify(&BytesData::Bytes(v.array.clone()), true), format!("0x{}", v.hex));
+            assert_eq!(
+                hexlify(&BytesData::Bytes(v.array.clone()), true),
+                format!("0x{}", v.hex)
+            );
             assert_eq!(hexlify(&BytesData::Big(v.number.clone()), false), v.hex);
-            assert_eq!(hexlify(&BytesData::Big(v.number.clone()), true), format!("0x{}", v.hex));
+            assert_eq!(
+                hexlify(&BytesData::Big(v.number.clone()), true),
+                format!("0x{}", v.hex)
+            );
         }
         assert_eq!(hexlify(&123u64.into(), false), "7b");
         assert_eq!(hexlify(&BytesData::Big(big10("123")), false), "7b");
@@ -449,14 +461,23 @@ mod tests {
         for v in convert_vectors() {
             assert_eq!(arrayify(&format!("0x{}", v.hex).into()).unwrap(), v.array);
             assert_eq!(arrayify(&v.hex.into()).unwrap(), v.array);
-            assert_eq!(arrayify(&BytesData::Bytes(v.array.clone())).unwrap(), v.array);
-            assert_eq!(arrayify(&BytesData::Big(v.number.clone())).unwrap(), v.array);
+            assert_eq!(
+                arrayify(&BytesData::Bytes(v.array.clone())).unwrap(),
+                v.array
+            );
+            assert_eq!(
+                arrayify(&BytesData::Big(v.number.clone())).unwrap(),
+                v.array
+            );
         }
     }
 
     #[test]
     fn should_not_arrayify_invalid() {
-        assert_eq!(arrayify(&"zzzzza".into()), Err(BytesError::InvalidBytesData));
+        assert_eq!(
+            arrayify(&"zzzzza".into()),
+            Err(BytesError::InvalidBytesData)
+        );
     }
 
     #[test]
@@ -465,12 +486,18 @@ mod tests {
         let p = |d: BytesData, l: usize, s: Side| pad_to_length(&d, l, s);
         // '4bd21a92a4c6e9f10164fe40'
         let s = "4bd21a92a4c6e9f10164fe40";
-        assert_eq!(p(s.into(), 16, Side::Left), Padded::Hex("000000004bd21a92a4c6e9f10164fe40".into()));
+        assert_eq!(
+            p(s.into(), 16, Side::Left),
+            Padded::Hex("000000004bd21a92a4c6e9f10164fe40".into())
+        );
         assert_eq!(
             p(s.into(), 32, Side::Left),
             Padded::Hex("00000000000000000000000000000000000000004bd21a92a4c6e9f10164fe40".into())
         );
-        assert_eq!(p(s.into(), 16, Side::Right), Padded::Hex("4bd21a92a4c6e9f10164fe4000000000".into()));
+        assert_eq!(
+            p(s.into(), 16, Side::Right),
+            Padded::Hex("4bd21a92a4c6e9f10164fe4000000000".into())
+        );
 
         // array
         let arr = BytesData::Bytes(vec![32, 12, 18, 245]);
@@ -485,30 +512,60 @@ mod tests {
 
         // bigint 16-byte value
         let n = BytesData::Big(big("0xf6fc84c9f21c24907d6bee6eec38caba"));
-        assert_eq!(p(n.clone(), 16, Side::Left), Padded::Hex("f6fc84c9f21c24907d6bee6eec38caba".into()));
+        assert_eq!(
+            p(n.clone(), 16, Side::Left),
+            Padded::Hex("f6fc84c9f21c24907d6bee6eec38caba".into())
+        );
         assert_eq!(
             p(n.clone(), 32, Side::Left),
             Padded::Hex("00000000000000000000000000000000f6fc84c9f21c24907d6bee6eec38caba".into())
         );
 
         // prefixed string keeps 0x
-        assert_eq!(p("0x00".into(), 4, Side::Left), Padded::Hex("0x00000000".into()));
+        assert_eq!(
+            p("0x00".into(), 4, Side::Left),
+            Padded::Hex("0x00000000".into())
+        );
     }
 
     #[test]
     fn should_trim_bytes() {
-        assert_eq!(trim(&BytesData::Big(big10("861")), 1, Side::Left), Trimmed::Big(big10("93")));
-        assert_eq!(trim(&"17b3c8d9".into(), 2, Side::Left), Trimmed::Hex("c8d9".into()));
-        assert_eq!(trim(&"17b3c8d9".into(), 2, Side::Right), Trimmed::Hex("17b3".into()));
-        assert_eq!(trim(&"0x17b3c8d9".into(), 2, Side::Left), Trimmed::Hex("0xc8d9".into()));
-        assert_eq!(trim(&"0x17b3c8d9".into(), 2, Side::Right), Trimmed::Hex("0x17b3".into()));
-        assert_eq!(trim(&BytesData::Bytes(vec![12, 4, 250]), 2, Side::Left), Trimmed::Bytes(vec![4, 250]));
-        assert_eq!(trim(&BytesData::Bytes(vec![12, 4, 250]), 2, Side::Right), Trimmed::Bytes(vec![12, 4]));
+        assert_eq!(
+            trim(&BytesData::Big(big10("861")), 1, Side::Left),
+            Trimmed::Big(big10("93"))
+        );
+        assert_eq!(
+            trim(&"17b3c8d9".into(), 2, Side::Left),
+            Trimmed::Hex("c8d9".into())
+        );
+        assert_eq!(
+            trim(&"17b3c8d9".into(), 2, Side::Right),
+            Trimmed::Hex("17b3".into())
+        );
+        assert_eq!(
+            trim(&"0x17b3c8d9".into(), 2, Side::Left),
+            Trimmed::Hex("0xc8d9".into())
+        );
+        assert_eq!(
+            trim(&"0x17b3c8d9".into(), 2, Side::Right),
+            Trimmed::Hex("0x17b3".into())
+        );
+        assert_eq!(
+            trim(&BytesData::Bytes(vec![12, 4, 250]), 2, Side::Left),
+            Trimmed::Bytes(vec![4, 250])
+        );
+        assert_eq!(
+            trim(&BytesData::Bytes(vec![12, 4, 250]), 2, Side::Right),
+            Trimmed::Bytes(vec![12, 4])
+        );
     }
 
     #[test]
     fn should_format_to_byte_length() {
-        assert_eq!(format_to_byte_length(&"17b3c8d9".into(), ByteLength::Uint8, true), "0xd9");
+        assert_eq!(
+            format_to_byte_length(&"17b3c8d9".into(), ByteLength::Uint8, true),
+            "0xd9"
+        );
         assert_eq!(
             format_to_byte_length(&"17b3c8d9".into(), ByteLength::Address, true),
             "0x0000000000000000000000000000000017b3c8d9"
@@ -567,7 +624,13 @@ mod tests {
     #[test]
     fn should_throw_on_invalid_utf8() {
         // 'PͶ𐀀Railgun' contains U+10000 (> 0xD800) => invalid
-        assert_eq!(from_utf8_string("PͶ𐀀Railgun"), Err(BytesError::InvalidUnicode));
-        assert_eq!(to_utf8_string("50cdb6f09080805261696c67756e"), Err(BytesError::InvalidUnicode));
+        assert_eq!(
+            from_utf8_string("PͶ𐀀Railgun"),
+            Err(BytesError::InvalidUnicode)
+        );
+        assert_eq!(
+            to_utf8_string("50cdb6f09080805261696c67756e"),
+            Err(BytesError::InvalidUnicode)
+        );
     }
 }

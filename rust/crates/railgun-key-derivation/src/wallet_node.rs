@@ -96,7 +96,10 @@ impl WalletNode {
     }
 
     /// `WalletNode.getMasterPublicKey` — poseidon([spendX, spendY, nullifyingKey]).
-    pub fn get_master_public_key(spending_public_key: &SpendingPublicKey, nullifying_key: &BigUint) -> BigUint {
+    pub fn get_master_public_key(
+        spending_public_key: &SpendingPublicKey,
+        nullifying_key: &BigUint,
+    ) -> BigUint {
         poseidon(&[
             spending_public_key.0.clone(),
             spending_public_key.1.clone(),

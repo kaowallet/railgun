@@ -15,7 +15,9 @@ pub enum Ed25519Error {
 
 /// `getPublicViewingKey` — 32-byte Ed25519 public key from a 32-byte secret.
 pub fn get_public_viewing_key(private_key: &[u8; 32]) -> [u8; 32] {
-    SigningKey::from_bytes(private_key).verifying_key().to_bytes()
+    SigningKey::from_bytes(private_key)
+        .verifying_key()
+        .to_bytes()
 }
 
 /// `signED25519`.
@@ -28,7 +30,8 @@ pub fn verify_ed25519(message: &[u8], signature: &[u8; 64], pubkey: &[u8; 32]) -
     let Ok(vk) = VerifyingKey::from_bytes(pubkey) else {
         return false;
     };
-    vk.verify(message, &Signature::from_bytes(signature)).is_ok()
+    vk.verify(message, &Signature::from_bytes(signature))
+        .is_ok()
 }
 
 #[cfg(test)]

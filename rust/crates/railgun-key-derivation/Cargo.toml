@@ -11,6 +11,7 @@ description = "BIP39, custom BabyJubJub BIP32 derivation, wallet keys, and bech3
 [dependencies]
 railgun-utils.workspace = true
 railgun-crypto.workspace = true
+railgun-models.workspace = true
 thiserror.workspace = true
 hex.workspace = true
 num-bigint.workspace = true
@@ -22,6 +23,7 @@ bech32.workspace = true
 # standard secp256k1 BIP32 for the EVM (0x) key helper; renamed to avoid colliding
 # with our own `bip32` module (the custom BabyJubJub derivation).
 bip32-secp = { package = "bip32", version = "0.5" }
+k256.workspace = true
 
 [dev-dependencies]
 serde = { workspace = true }

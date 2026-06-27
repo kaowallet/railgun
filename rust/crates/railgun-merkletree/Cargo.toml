@@ -1,0 +1,24 @@
+[package]
+name = "railgun-merkletree"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# Poseidon merkletree (depth-16) plus UTXO/TXID specializations. Port of
+# src/merkletree/*.ts. The write-queue/async-lock machinery from the TS is
+# collapsed to a synchronous, in-memory implementation (see PORT_PLAN: lower
+# crates are sync) while preserving exact byte/hash/DB-path semantics.
+[dependencies]
+railgun-utils.workspace = true
+railgun-crypto.workspace = true
+railgun-models.workspace = true
+railgun-db.workspace = true
+
+thiserror.workspace = true
+num-bigint.workspace = true
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true

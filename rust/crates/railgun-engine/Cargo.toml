@@ -1,0 +1,37 @@
+[package]
+name = "railgun-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Engine orchestrator: sync, merkleroot validation, balance decryption, POI proof validation, transaction-data extraction, token-data getter (port of src/railgun-engine.ts + src/validation + src/token + src/debugger)."
+
+[dependencies]
+railgun-utils.workspace = true
+railgun-crypto.workspace = true
+railgun-models.workspace = true
+railgun-key-derivation.workspace = true
+railgun-db.workspace = true
+railgun-note.workspace = true
+railgun-solutions.workspace = true
+railgun-transaction.workspace = true
+railgun-poi.workspace = true
+railgun-prover.workspace = true
+railgun-contracts.workspace = true
+railgun-wallet.workspace = true
+
+thiserror.workspace = true
+hex.workspace = true
+num-bigint.workspace = true
+num-traits.workspace = true
+async-trait.workspace = true
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = "0.1"
+
+alloy = { workspace = true, features = ["sol-types", "dyn-abi", "json-abi"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

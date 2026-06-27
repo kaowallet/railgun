@@ -1,8 +1,15 @@
 // Differential-fuzz oracle generator.
 //
-// Runs the REAL RAILGUN TypeScript crypto/byte/mnemonic functions over seeded
-// random + boundary inputs and writes (input, output) corpora to rust/vectors/.
-// The Rust integration tests replay these and assert byte-equality.
+// Runs the REAL RAILGUN TypeScript functions over seeded random + boundary
+// inputs and writes (input, output) corpora to rust/vectors/. The Rust
+// integration tests (crates/*/tests/fuzz_*.rs) replay these and assert
+// byte-equality. Coverage:
+//   bytes.json          — ByteUtils (hex/bigint/byte/utf8)
+//   crypto.json         — hashes, Poseidon (+ wide 13-input), spending/viewing
+//                         keys, ECDH, AES-256-GCM/CTR, XChaCha20-Poly1305
+//   keyderivation.json  — BIP39, BabyJubJub BIP32, wallet keys, 0zk addresses
+//   higher.json         — token/note hashing, railgun-txid, txid leaf + tx
+//                         verification hash, blinded commitments, tree position
 //
 //   NODE_ENV=test bun run rust/oracle/gen.ts [seed] [count]
 //
@@ -18,19 +25,43 @@ import {
   getPublicViewingKey,
   getPrivateScalarFromPrivateKey,
   getSharedSymmetricKey,
+  signEDDSA,
+  verifyEDDSA,
+  getNoteBlindingKeys,
+  unblindNoteKey,
 } from '../../src/utils/keys-utils';
+import { encryptJSONDataWithSharedKey } from '../../src/utils/ecies';
+import { TransactNote } from '../../src/note/transact-note';
 import { initCurve25519Promise } from '../../src/utils/scalar-multiply';
 import { Mnemonic } from '../../src/key-derivation/bip39';
 import { WalletNode } from '../../src/key-derivation/wallet-node';
 import { getMasterKeyFromSeed, childKeyDerivationHardened } from '../../src/key-derivation/bip32';
 import { encodeAddress, decodeAddress } from '../../src/key-derivation/bech32';
+import { AES } from '../../src/utils/encryption/aes';
+import { XChaCha20 } from '../../src/utils/encryption/x-cha-cha-20';
+import {
+  getTokenDataHash,
+  getNoteHash,
+  getTokenDataERC20,
+  getTokenDataNFT,
+} from '../../src/note/note-util';
+import {
+  getRailgunTransactionIDHex,
+  getRailgunTxidLeafHash,
+  calculateRailgunTransactionVerificationHash,
+} from '../../src/transaction/railgun-txid';
+import { BlindedCommitment } from '../../src/poi/blinded-commitment';
+import { getGlobalTreePosition } from '../../src/poi/global-tree-position';
+import { TokenType } from '../../src/models/formatted-types';
 
 await initPoseidonPromise;
 await initCurve25519Promise;
 
 const SEED = process.argv[2] ? Number(process.argv[2]) : 0xc0ffee;
 const N = process.argv[3] ? Number(process.argv[3]) : 400;
-const OUT = `${import.meta.dir}/../vectors`;
+// Output dir: VECTORS_DIR lets the parallel fuzz runner give each random-seed
+// worker its own corpus directory; defaults to the committed rust/vectors.
+const OUT = process.env.VECTORS_DIR ?? `${import.meta.dir}/../vectors`;
 mkdirSync(OUT, { recursive: true });
 
 const SNARK_PRIME = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
@@ -148,11 +179,18 @@ async function genCrypto() {
   const keccak256s: any[] = [];
   const sha512Hmac: any[] = [];
   const poseidons: any[] = [];
+  const poseidonWide: any[] = [];
   const poseidonHexs: any[] = [];
   const spendingKey: any[] = [];
   const viewingKey: any[] = [];
   const privateScalar: any[] = [];
   const sharedKey: any[] = [];
+  const aesGcm: any[] = [];
+  const aesCtr: any[] = [];
+  const xchacha: any[] = [];
+  const eddsa: any[] = [];
+  const blindingKeys: any[] = [];
+  const ecies: any[] = [];
 
   for (let i = 0; i < N; i++) {
     const msg = randHex(randInt(200));
@@ -168,6 +206,29 @@ async function genCrypto() {
     const hexInputs = inputs.map((x) => ByteUtils.nToHex(x % SNARK_PRIME, ByteLength.UINT_256));
     poseidonHexs.push({ in: hexInputs, out: poseidonHex(hexInputs) });
 
+    // Wide Poseidon (7..13 inputs) — exercises the > 12-input path used by
+    // getRailgunTransactionID, which light-poseidon cannot do (poseidon-ark in Rust).
+    const wideArity = 7 + randInt(7);
+    const wideInputs = Array.from({ length: wideArity }, randField);
+    poseidonWide.push({ in: wideInputs.map(dec), out: dec(poseidon(wideInputs)) });
+
+    // AES-256-GCM / -CTR: TS encrypts (random IV) -> Rust decrypts and must recover
+    // the plaintext. 32-byte key, 1..40-byte value chunked at 32 bytes.
+    const aesKey = randHex(32);
+    const value = randHex(1 + randInt(40));
+    const chunks = ByteUtils.chunk(value, 32);
+    aesGcm.push({ key: aesKey, plaintext: value, ct: AES.encryptGCM(chunks, aesKey) });
+    aesCtr.push({ key: aesKey, plaintext: value, ct: AES.encryptCTR(chunks, aesKey) });
+
+    // XChaCha20-Poly1305: TS encrypts -> Rust decrypts.
+    const xKey = randBytes(32);
+    const xValue = randHex(1 + randInt(60));
+    xchacha.push({
+      key: hex(xKey),
+      plaintext: xValue,
+      ct: XChaCha20.encryptChaCha20Poly1305(xValue, xKey),
+    });
+
     const priv = randBytes(32);
     const [sx, sy] = getPublicSpendingKey(priv);
     spendingKey.push({ in: hex(priv), x: dec(sx), y: dec(sy) });
@@ -178,12 +239,132 @@ async function genCrypto() {
     const pubB = randBytes(32);
     const sk = await getSharedSymmetricKey(privA, pubB);
     sharedKey.push({ privA: hex(privA), pubB: hex(pubB), out: sk ? hex(sk) : null });
+
+    // BabyJubJub Poseidon-EdDSA: spending-auth signature. Deterministic, so the
+    // signature itself must match byte-for-byte; verify must accept it.
+    const edPriv = randBytes(32);
+    const edMsg = randField() % SNARK_PRIME;
+    const sig = signEDDSA(edPriv, edMsg);
+    const edPub = getPublicSpendingKey(edPriv);
+    eddsa.push({
+      priv: hex(edPriv),
+      msg: dec(edMsg),
+      r8x: dec(sig.R8[0]),
+      r8y: dec(sig.R8[1]),
+      s: dec(sig.S),
+      pubX: dec(edPub[0]),
+      pubY: dec(edPub[1]),
+      verified: verifyEDDSA(edMsg, sig, edPub),
+    });
+
+    // Note blinding keys (X25519): blind sender/receiver viewing pubkeys, then
+    // unblind must recover the originals. Pubkeys are real Ed25519 points.
+    const sViewPub = await getPublicViewingKey(randBytes(32));
+    const rViewPub = await getPublicViewingKey(randBytes(32));
+    const sharedRandom = randHex(16);
+    const senderRandom = randHex(16);
+    const { blindedSenderViewingKey, blindedReceiverViewingKey } = getNoteBlindingKeys(
+      sViewPub,
+      rViewPub,
+      sharedRandom,
+      senderRandom,
+    );
+    blindingKeys.push({
+      senderPub: hex(sViewPub),
+      receiverPub: hex(rViewPub),
+      sharedRandom,
+      senderRandom,
+      blindedSender: hex(blindedSenderViewingKey),
+      blindedReceiver: hex(blindedReceiverViewingKey),
+      // Sanity: TS itself can round-trip the receiver key.
+      unblindedReceiver: hex(unblindNoteKey(blindedReceiverViewingKey, sharedRandom, senderRandom)!),
+    });
+
+    // ECIES: TS encrypts a small JSON object with a shared key; Rust must decrypt
+    // it back to the identical object (and reject a wrong key).
+    const eciesKey = randBytes(32);
+    const obj: Record<string, unknown> = {};
+    const nFields = 1 + randInt(3);
+    for (let f = 0; f < nFields; f++) obj[`k${f}`] = randHex(1 + randInt(40));
+    if (rng() < 0.5) obj.num = randInt(1_000_000);
+    if (rng() < 0.5) obj.nested = { a: randHex(8), b: randInt(256) };
+    ecies.push({ key: hex(eciesKey), json: obj, encrypted: encryptJSONDataWithSharedKey(obj, eciesKey) });
   }
 
   return {
     sha256: sha256s, sha512: sha512s, keccak256: keccak256s, sha512Hmac,
-    poseidon: poseidons, poseidonHex: poseidonHexs,
+    poseidon: poseidons, poseidonWide, poseidonHex: poseidonHexs,
     spendingKey, viewingKey, privateScalar, sharedKey,
+    aesGcm, aesCtr, xchacha, eddsa, blindingKeys, ecies,
+  };
+}
+
+// ---- higher layers: note / transaction / poi ----------------------------
+function genHigher() {
+  const tokenHashErc20: any[] = [];
+  const tokenHashNft: any[] = [];
+  const noteHash: any[] = [];
+  const railgunTxid: any[] = [];
+  const txidLeafHash: any[] = [];
+  const verificationHash: any[] = [];
+  const blindedShieldTransact: any[] = [];
+  const blindedUnshield: any[] = [];
+  const globalTreePosition: any[] = [];
+  const nullifier: any[] = [];
+
+  const nftTypes = [TokenType.ERC721, TokenType.ERC1155] as const;
+
+  for (let i = 0; i < N; i++) {
+    const erc20 = getTokenDataERC20(randHex(20));
+    tokenHashErc20.push({ tokenData: erc20, out: getTokenDataHash(erc20) });
+
+    const nft = getTokenDataNFT(randHex(20), choice([...nftTypes]), randHex(32));
+    tokenHashNft.push({ tokenData: nft, out: getTokenDataHash(nft) });
+
+    // getNoteHash(address, tokenData, value): random 0zk masterPublicKey + value.
+    const addr = ByteUtils.nToHex(randField() % SNARK_PRIME, ByteLength.UINT_256, true);
+    const td = rng() < 0.5 ? erc20 : nft;
+    const noteValue = randBigint(16);
+    noteHash.push({ address: addr, tokenData: td, value: dec(noteValue), out: dec(getNoteHash(addr, td, noteValue)) });
+
+    // getRailgunTransactionID: random 1..5 nullifiers + commitments (exercises wide Poseidon).
+    const nNull = 1 + randInt(5);
+    const nComm = 1 + randInt(5);
+    const nullifiers = Array.from({ length: nNull }, () => ByteUtils.nToHex(randField() % SNARK_PRIME, ByteLength.UINT_256, true));
+    const commitments = Array.from({ length: nComm }, () => ByteUtils.nToHex(randField() % SNARK_PRIME, ByteLength.UINT_256, true));
+    const boundParamsHash = ByteUtils.nToHex(randField() % SNARK_PRIME, ByteLength.UINT_256, true);
+    railgunTxid.push({ nullifiers, commitments, boundParamsHash, out: getRailgunTransactionIDHex({ nullifiers, commitments, boundParamsHash }) });
+
+    const txidBig = randField() % SNARK_PRIME;
+    const utxoTreeIn = BigInt(randInt(20));
+    const gpos = getGlobalTreePosition(randInt(50), randInt(0xffff));
+    txidLeafHash.push({ txid: dec(txidBig), utxoTreeIn: dec(utxoTreeIn), globalPos: dec(gpos), out: getRailgunTxidLeafHash(txidBig, utxoTreeIn, gpos) });
+
+    const prev = rng() < 0.3 ? undefined : ByteUtils.nToHex(randField(), ByteLength.UINT_256, true);
+    const firstNullifier = ByteUtils.nToHex(randField(), ByteLength.UINT_256, true);
+    verificationHash.push({ prev: prev ?? null, firstNullifier, out: calculateRailgunTransactionVerificationHash(prev, firstNullifier) });
+
+    const commitmentHash = ByteUtils.nToHex(randField() % SNARK_PRIME, ByteLength.UINT_256, true);
+    const npk = randField() % SNARK_PRIME;
+    const gtp = getGlobalTreePosition(randInt(50), randInt(0xffff));
+    blindedShieldTransact.push({ commitmentHash, npk: dec(npk), globalTreePosition: dec(gtp), out: BlindedCommitment.getForShieldOrTransact(commitmentHash, npk, gtp) });
+
+    const rt = ByteUtils.nToHex(randField() % SNARK_PRIME, ByteLength.UINT_256, true);
+    blindedUnshield.push({ railgunTxid: rt, out: BlindedCommitment.getForUnshield(rt) });
+
+    const tree = randInt(100);
+    const index = randInt(0xffff);
+    globalTreePosition.push({ tree, index, out: dec(getGlobalTreePosition(tree, index)) });
+
+    // Nullifier = poseidon([nullifyingKey, leafIndex]).
+    const nk = randField() % SNARK_PRIME;
+    const leafIndex = randInt(0xffffff);
+    nullifier.push({ nullifyingKey: dec(nk), leafIndex, out: dec(TransactNote.getNullifier(nk, leafIndex)) });
+  }
+
+  return {
+    tokenHashErc20, tokenHashNft, noteHash, railgunTxid, txidLeafHash,
+    verificationHash, blindedShieldTransact, blindedUnshield, globalTreePosition, nullifier,
   };
 }
 
@@ -264,4 +445,5 @@ const meta = { seed: SEED, count: N };
 await Bun.write(`${OUT}/bytes.json`, JSON.stringify({ meta, ...genBytes() }));
 await Bun.write(`${OUT}/crypto.json`, JSON.stringify({ meta, ...(await genCrypto()) }));
 await Bun.write(`${OUT}/keyderivation.json`, JSON.stringify({ meta, ...(await genKeyDerivation()) }));
+await Bun.write(`${OUT}/higher.json`, JSON.stringify({ meta, ...genHigher() }));
 console.log(`Wrote corpora to ${OUT} (seed=${SEED.toString(16)}, count=${N})`);

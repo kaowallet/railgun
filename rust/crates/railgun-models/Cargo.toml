@@ -1,0 +1,19 @@
+[package]
+name = "railgun-models"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Pure data types/enums shared by every higher RAILGUN crate (port of src/models/)."
+
+[dependencies]
+railgun-utils.workspace = true
+railgun-crypto.workspace = true
+thiserror.workspace = true
+num-bigint.workspace = true
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -76,7 +76,9 @@ pub struct Database<S: KvStore> {
 impl Database<MemStore> {
     /// In-memory database (used by tests and ephemeral contexts).
     pub fn in_memory() -> Self {
-        Self { store: MemStore::new() }
+        Self {
+            store: MemStore::new(),
+        }
     }
 }
 
@@ -186,7 +188,10 @@ mod tests {
         hex::decode(TEST_KEY_HEX).unwrap()
     }
     fn p(parts: &[&str]) -> Vec<BytesData> {
-        parts.iter().map(|s| BytesData::Hex((*s).to_string())).collect()
+        parts
+            .iter()
+            .map(|s| BytesData::Hex((*s).to_string()))
+            .collect()
     }
 
     // src/database/__tests__/database.test.ts
@@ -200,7 +205,9 @@ mod tests {
     #[test]
     fn crud_operations() {
         let mut db = Database::in_memory();
-        assert!(matches!(db.get(&p(&["a"])), Err(DbError::KeyNotFound(k)) if k == "000000000000000000000000000000000000000000000000000000000000000a"));
+        assert!(
+            matches!(db.get(&p(&["a"])), Err(DbError::KeyNotFound(k)) if k == "000000000000000000000000000000000000000000000000000000000000000a")
+        );
         db.put(&p(&["a"]), &BytesData::Hex("01".into())).unwrap();
         assert_eq!(db.get(&p(&["a"])).unwrap(), "01");
         db.del(&p(&["a"]));
@@ -217,9 +224,12 @@ mod tests {
     #[test]
     fn count_namespace() {
         let mut db = Database::in_memory();
-        db.put(&p(&["a", "a"]), &BytesData::Hex("01".into())).unwrap();
-        db.put(&p(&["a", "b"]), &BytesData::Hex("02".into())).unwrap();
-        db.put(&p(&["a", "c"]), &BytesData::Hex("03".into())).unwrap();
+        db.put(&p(&["a", "a"]), &BytesData::Hex("01".into()))
+            .unwrap();
+        db.put(&p(&["a", "b"]), &BytesData::Hex("02".into()))
+            .unwrap();
+        db.put(&p(&["a", "c"]), &BytesData::Hex("03".into()))
+            .unwrap();
         assert_eq!(db.get(&p(&["a", "a"])).unwrap(), "01");
         assert_eq!(db.count_namespace(&p(&["a"])), 3);
     }
@@ -227,9 +237,12 @@ mod tests {
     #[test]
     fn stream_range() {
         let mut db = Database::in_memory();
-        db.put(&p(&["a", "a"]), &BytesData::Hex("01".into())).unwrap();
-        db.put(&p(&["a", "b"]), &BytesData::Hex("02".into())).unwrap();
-        db.put(&p(&["a", "c"]), &BytesData::Hex("03".into())).unwrap();
+        db.put(&p(&["a", "a"]), &BytesData::Hex("01".into()))
+            .unwrap();
+        db.put(&p(&["a", "b"]), &BytesData::Hex("02".into()))
+            .unwrap();
+        db.put(&p(&["a", "c"]), &BytesData::Hex("03".into()))
+            .unwrap();
         let mut datas = db.stream_range(&p(&["a", "a"]), &p(&["a", "c"]));
         datas.sort();
         assert_eq!(datas, vec!["01", "02", "03"]);
@@ -238,19 +251,32 @@ mod tests {
     #[test]
     fn clear_namespace() {
         let mut db = Database::in_memory();
-        db.put(&p(&["a", "a"]), &BytesData::Hex("01".into())).unwrap();
-        db.put(&p(&["a", "b"]), &BytesData::Hex("02".into())).unwrap();
-        db.put(&p(&["a", "c"]), &BytesData::Hex("03".into())).unwrap();
+        db.put(&p(&["a", "a"]), &BytesData::Hex("01".into()))
+            .unwrap();
+        db.put(&p(&["a", "b"]), &BytesData::Hex("02".into()))
+            .unwrap();
+        db.put(&p(&["a", "c"]), &BytesData::Hex("03".into()))
+            .unwrap();
         db.clear_namespace(&p(&["a"]));
-        assert!(matches!(db.get(&p(&["a", "a"])), Err(DbError::KeyNotFound(k))
-            if k == "000000000000000000000000000000000000000000000000000000000000000a:000000000000000000000000000000000000000000000000000000000000000a"));
+        assert!(
+            matches!(db.get(&p(&["a", "a"])), Err(DbError::KeyNotFound(k))
+            if k == "000000000000000000000000000000000000000000000000000000000000000a:000000000000000000000000000000000000000000000000000000000000000a")
+        );
     }
 
     #[test]
     fn byte_array_to_hex() {
         let mut db = Database::in_memory();
-        db.put(&[BytesData::Bytes(vec![0x1]), BytesData::Bytes(vec![0xa])], &BytesData::Bytes(vec![0xaa])).unwrap();
-        db.put(&[BytesData::Bytes(vec![0x1]), BytesData::Bytes(vec![0xb])], &BytesData::Bytes(vec![0xab])).unwrap();
+        db.put(
+            &[BytesData::Bytes(vec![0x1]), BytesData::Bytes(vec![0xa])],
+            &BytesData::Bytes(vec![0xaa]),
+        )
+        .unwrap();
+        db.put(
+            &[BytesData::Bytes(vec![0x1]), BytesData::Bytes(vec![0xb])],
+            &BytesData::Bytes(vec![0xab]),
+        )
+        .unwrap();
         assert_eq!(db.get(&p(&["01", "0a"])).unwrap(), "aa");
         assert_eq!(db.get(&p(&["01", "0b"])).unwrap(), "ab");
     }

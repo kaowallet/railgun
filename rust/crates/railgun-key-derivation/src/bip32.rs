@@ -118,15 +118,19 @@ mod tests {
         assert_eq!(
             child_key_derivation_hardened(&parent1, 0, HARDENED_OFFSET),
             KeyNode {
-                chain_code: "e8e6a1bbce8bab145fe8225435dc98d20d53bd32318ce3ede560b8feef3394a5".into(),
-                chain_key: "67d7d19d00e6e3b3517fe68ac46505dd207df6e8fe3aa06ba3face352e7599ef".into(),
+                chain_code: "e8e6a1bbce8bab145fe8225435dc98d20d53bd32318ce3ede560b8feef3394a5"
+                    .into(),
+                chain_key: "67d7d19d00e6e3b3517fe68ac46505dd207df6e8fe3aa06ba3face352e7599ef"
+                    .into(),
             }
         );
         assert_eq!(
             child_key_derivation_hardened(&parent1, 12, HARDENED_OFFSET),
             KeyNode {
-                chain_code: "ff90a1dcb6531d437dc959b6e03f308dd4d9db7e489bdb30d8b4b1894a9e1344".into(),
-                chain_key: "9606ae0c844601e0af4d518dce577983ad756dea08726d92c080ed2ca3f5f31d".into(),
+                chain_code: "ff90a1dcb6531d437dc959b6e03f308dd4d9db7e489bdb30d8b4b1894a9e1344"
+                    .into(),
+                chain_key: "9606ae0c844601e0af4d518dce577983ad756dea08726d92c080ed2ca3f5f31d"
+                    .into(),
             }
         );
         let parent2 = KeyNode {
@@ -136,8 +140,10 @@ mod tests {
         assert_eq!(
             child_key_derivation_hardened(&parent2, 1, HARDENED_OFFSET),
             KeyNode {
-                chain_code: "30c3769638ef70c9179a7b18a507318d2353831c2d7990056334cbf14ed4a2cf".into(),
-                chain_key: "0b20d68e515add21c2686d88b8ae02d82912741ed66cb776b6a2eec628ce5fef".into(),
+                chain_code: "30c3769638ef70c9179a7b18a507318d2353831c2d7990056334cbf14ed4a2cf"
+                    .into(),
+                chain_key: "0b20d68e515add21c2686d88b8ae02d82912741ed66cb776b6a2eec628ce5fef"
+                    .into(),
             }
         );
     }
@@ -148,7 +154,10 @@ mod tests {
         assert_eq!(get_path_segments("m/12'/0'/15'").unwrap(), vec![12, 0, 15]);
         assert_eq!(get_path_segments("m/1'/91'/12'").unwrap(), vec![1, 91, 12]);
         for invalid in ["m/0/0", "railgun", "m/0'/0'/x"] {
-            assert_eq!(get_path_segments(invalid), Err(DerivationError::InvalidPath));
+            assert_eq!(
+                get_path_segments(invalid),
+                Err(DerivationError::InvalidPath)
+            );
         }
     }
 }

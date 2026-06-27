@@ -7,7 +7,9 @@ pub mod bip39;
 pub mod chain;
 pub mod wallet_node;
 
-pub use address::{decode_address, encode_address, AddressData, AddressError, ADDRESS_LENGTH_LIMIT};
+pub use address::{
+    decode_address, encode_address, AddressData, AddressError, ADDRESS_LENGTH_LIMIT,
+};
 pub use bip32::{
     child_key_derivation_hardened, get_master_key_from_seed, get_path_segments, KeyNode,
     HARDENED_OFFSET,

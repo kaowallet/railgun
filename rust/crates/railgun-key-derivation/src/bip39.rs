@@ -64,6 +64,47 @@ impl Mnemonic {
             bip32_secp::XPrv::derive_from_path(seed, &dp).map_err(|_| MnemonicError::Derivation)?;
         Ok(hex::encode(xprv.private_key().to_bytes()))
     }
+
+    /// `Mnemonic.to0xAddress` — the EIP-55 checksummed EVM address for the
+    /// secp256k1 key at `m/44'/60'/0'/0/index` (ethers' `HDNodeWallet.address`).
+    pub fn to_0x_address(
+        mnemonic: &str,
+        derivation_index: Option<u32>,
+        password: &str,
+    ) -> Result<String, MnemonicError> {
+        let m = Bip39Mnemonic::parse_normalized(mnemonic).map_err(|_| MnemonicError::Invalid)?;
+        let seed = m.to_seed(password);
+        let path = format!("m/44'/60'/0'/0/{}", derivation_index.unwrap_or(0));
+        let dp: bip32_secp::DerivationPath = path.parse().map_err(|_| MnemonicError::Derivation)?;
+        let xprv =
+            bip32_secp::XPrv::derive_from_path(seed, &dp).map_err(|_| MnemonicError::Derivation)?;
+
+        // Uncompressed secp256k1 public key (65 bytes: 0x04 || X || Y); drop the
+        // prefix, keccak256 the 64-byte (X||Y) body, take the last 20 bytes.
+        let verifying_key = xprv.private_key().verifying_key();
+        let encoded = verifying_key.to_encoded_point(false);
+        let body = &encoded.as_bytes()[1..];
+        let hash = railgun_crypto::keccak256_bytes(body);
+        let address_bytes = &hash[12..32];
+        Ok(eip55_checksum(address_bytes))
+    }
+}
+
+/// EIP-55 mixed-case checksum encoding of a 20-byte address.
+fn eip55_checksum(address: &[u8]) -> String {
+    let lower = hex::encode(address);
+    let hash = railgun_crypto::keccak256(lower.as_bytes());
+    let mut out = String::with_capacity(42);
+    out.push_str("0x");
+    for (i, ch) in lower.chars().enumerate() {
+        let nibble = u8::from_str_radix(&hash[i..i + 1], 16).unwrap_or(0);
+        if ch.is_ascii_alphabetic() && nibble >= 8 {
+            out.push(ch.to_ascii_uppercase());
+        } else {
+            out.push(ch);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -76,7 +117,9 @@ mod tests {
         assert_eq!(Mnemonic::generate(128).split(' ').count(), 12);
         assert_eq!(Mnemonic::generate(192).split(' ').count(), 18);
         assert_eq!(Mnemonic::generate(256).split(' ').count(), 24);
-        assert!(Mnemonic::generate(128).chars().all(|c| c.is_ascii_lowercase() || c == ' '));
+        assert!(Mnemonic::generate(128)
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c == ' '));
     }
 
     #[test]
@@ -123,6 +166,16 @@ mod tests {
         for (mnemonic, password, seed) in vectors {
             assert_eq!(Mnemonic::to_seed(mnemonic, password).unwrap(), seed);
         }
+    }
+
+    // The hardhat default account 0 (mnemonic "test test ... junk").
+    #[test]
+    fn to_0x_address_vector() {
+        let m = "test test test test test test test test test test test junk";
+        assert_eq!(
+            Mnemonic::to_0x_address(m, Some(0), "").unwrap(),
+            "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        );
     }
 
     // src/key-derivation/__tests__/mnemonic.test.ts

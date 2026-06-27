@@ -26,21 +26,64 @@ fn to_be_32(n: &BigUint) -> [u8; 32] {
     out
 }
 
+/// light-poseidon caps out at `width = 13`, i.e. 12 inputs. Wider hashes (the
+/// 13-input padded arrays used by RailgunTransactionID) route to
+/// [`poseidon_wide`].
+const LIGHT_POSEIDON_MAX_INPUTS: usize = 12;
+
 /// `poseidon(args)` — hash an array of field elements, returning a field element.
 ///
 /// circomlibjs coerces every input through `F.e(x)` (i.e. reduces mod the field
-/// prime); we replicate that before handing off to light-poseidon, which rejects
-/// inputs >= the modulus.
+/// prime); we replicate that before hashing. For 1..=12 inputs this delegates to
+/// light-poseidon (Veridise-audited); for 13..=16 inputs — which light-poseidon
+/// cannot do — it delegates to arnaucube's `poseidon-ark`, cross-validated
+/// against the small-width KAVs in tests.
 pub fn poseidon(inputs: &[BigUint]) -> BigUint {
+    if inputs.len() > LIGHT_POSEIDON_MAX_INPUTS {
+        return poseidon_wide(inputs);
+    }
     let modulus = field_modulus();
     let mut hasher = Poseidon::<ark_bn254::Fr>::new_circom(inputs.len())
-        .expect("poseidon supports widths 1..=12");
+        .expect("poseidon supports widths 1..=13 (i.e. up to 12 inputs)");
     let arrays: Vec<[u8; 32]> = inputs.iter().map(|n| to_be_32(&(n % &modulus))).collect();
     let refs: Vec<&[u8]> = arrays.iter().map(|a| a.as_slice()).collect();
     let hash = hasher
         .hash_bytes_be(&refs)
         .expect("inputs are reduced field elements");
     BigUint::from_bytes_be(&hash)
+}
+
+/// Wide circom-Poseidon (13..=16 inputs) via arnaucube's `poseidon-ark`.
+///
+/// It carries its own arkworks tree, so we bridge purely through canonical
+/// decimal field-element strings (`BigUint` -> `Fr::from_str` -> decimal out)
+/// rather than sharing any arkworks types with the rest of the crate.
+fn poseidon_wide(inputs: &[BigUint]) -> BigUint {
+    use ark_bn254_04::Fr as ArkFr;
+    use poseidon_ark_no_std::Poseidon as PoseidonArk;
+    use std::str::FromStr;
+
+    // `Poseidon::new()` builds all the circom constant tables, so cache one
+    // instance per thread (`hash` takes `&self`) — otherwise every call rebuilds
+    // them, which dominates runtime when hashing thousands of 13-input arrays.
+    thread_local! {
+        static HASHER: PoseidonArk = PoseidonArk::new();
+    }
+
+    let modulus = field_modulus();
+    let fr_inputs: Vec<ArkFr> = inputs
+        .iter()
+        .map(|n| {
+            let reduced = n % &modulus;
+            ArkFr::from_str(&reduced.to_str_radix(10)).expect("reduced field element parses as Fr")
+        })
+        .collect();
+    let result = HASHER
+        .with(|h| h.hash(fr_inputs))
+        .expect("poseidon-ark supports 1..=16 inputs");
+    // ark 0.4 `Fr` Display is the canonical decimal representation.
+    BigUint::parse_bytes(result.to_string().as_bytes(), 10)
+        .expect("poseidon-ark output is a canonical field element")
 }
 
 /// `poseidonHex(args)` — hash hex strings (0x-prefixed or not), 64-char hex out.
@@ -65,7 +108,9 @@ mod tests {
     fn poseidon_bigint_inputs() {
         assert_eq!(
             poseidon(&[BigUint::from(0u8), BigUint::from(1u8)]),
-            big_dec("12583541437132735734108669866114103169564651237895298778035846191048104863326")
+            big_dec(
+                "12583541437132735734108669866114103169564651237895298778035846191048104863326"
+            )
         );
     }
 
@@ -98,6 +143,47 @@ mod tests {
                 "0x6b021e0d06d0b2d161cf0ea494e3fc1cbff12cc1b29281f7412170351b708fad"
             )]),
             big_hex("0x0b77a7c8dcbf2c84e75b6ff1dd558365532956cb7c1f328a67220a3a47a3ab43")
+        );
+    }
+
+    // Cross-validate the wide (poseidon-ark) path against light-poseidon on the
+    // small-width KAVs, so its 13+-input output can be trusted. The two paths
+    // MUST agree bit-for-bit on widths both can compute.
+    #[test]
+    fn poseidon_wide_matches_light_poseidon_small_widths() {
+        let cases: Vec<Vec<BigUint>> = vec![
+            vec![BigUint::from(0u8), BigUint::from(1u8)],
+            vec![BigUint::from(1u8), BigUint::from(2u8)],
+            vec![
+                BigUint::from(1u8),
+                BigUint::from(2u8),
+                BigUint::from(3u8),
+                BigUint::from(4u8),
+            ],
+            (1u8..=12).map(BigUint::from).collect(),
+        ];
+        for inputs in cases {
+            let light = super::poseidon(&inputs); // routes to light-poseidon (<=12)
+            let wide = super::poseidon_wide(&inputs);
+            assert_eq!(
+                light,
+                wide,
+                "wide/light mismatch for {} inputs",
+                inputs.len()
+            );
+        }
+    }
+
+    // The 13-input padded path used by getRailgunTransactionIDFromBigInts must
+    // route through poseidon-ark and produce a canonical field element.
+    #[test]
+    fn poseidon_thirteen_inputs_circomlib_vector() {
+        // circomlibjs poseidon([1..=13]) reference value.
+        let inputs: Vec<BigUint> = (1u8..=13).map(BigUint::from).collect();
+        let out = poseidon(&inputs);
+        assert_eq!(
+            out,
+            big_dec("7041832639553862712666971417715061873827921493498355005117622707743491651590")
         );
     }
 }

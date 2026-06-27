@@ -7,8 +7,11 @@ use railgun_key_derivation::*;
 use serde::Deserialize;
 
 fn load(name: &str) -> serde_json::Value {
-    let path = format!("{}/../../vectors/{}", env!("CARGO_MANIFEST_DIR"), name);
-    let bytes = std::fs::read(&path).unwrap_or_else(|_| panic!("missing corpus {path}; run the oracle generator"));
+    let dir = std::env::var("RAILGUN_VECTORS_DIR")
+        .unwrap_or_else(|_| format!("{}/../../vectors", env!("CARGO_MANIFEST_DIR")));
+    let path = format!("{dir}/{name}");
+    let bytes = std::fs::read(&path)
+        .unwrap_or_else(|_| panic!("missing corpus {path}; run the oracle generator"));
     serde_json::from_slice(&bytes).unwrap()
 }
 fn from<T: for<'de> Deserialize<'de>>(v: &serde_json::Value, key: &str) -> Vec<T> {
@@ -99,40 +102,94 @@ fn fuzz_key_derivation_against_ts_oracle() {
     let v = load("keyderivation.json");
 
     for c in from::<ToSeed>(&v, "toSeed") {
-        assert_eq!(Mnemonic::to_seed(&c.mnemonic, &c.password).unwrap(), c.out, "toSeed");
+        assert_eq!(
+            Mnemonic::to_seed(&c.mnemonic, &c.password).unwrap(),
+            c.out,
+            "toSeed"
+        );
     }
     for c in from::<Entropy>(&v, "entropy") {
-        assert_eq!(Mnemonic::to_entropy(&c.mnemonic).unwrap(), c.entropy, "toEntropy");
-        assert_eq!(Mnemonic::from_entropy(&c.entropy).unwrap(), c.mnemonic, "fromEntropy");
+        assert_eq!(
+            Mnemonic::to_entropy(&c.mnemonic).unwrap(),
+            c.entropy,
+            "toEntropy"
+        );
+        assert_eq!(
+            Mnemonic::from_entropy(&c.entropy).unwrap(),
+            c.mnemonic,
+            "fromEntropy"
+        );
     }
     for c in from::<To0x>(&v, "to0xPrivateKey") {
-        assert_eq!(Mnemonic::to_0x_private_key(&c.mnemonic, Some(c.index), "").unwrap(), c.out, "to0xPrivateKey");
+        assert_eq!(
+            Mnemonic::to_0x_private_key(&c.mnemonic, Some(c.index), "").unwrap(),
+            c.out,
+            "to0xPrivateKey"
+        );
     }
     for c in from::<MasterKey>(&v, "masterKey") {
         let node = get_master_key_from_seed(&c.seed);
-        assert_eq!(node, KeyNode { chain_key: c.chain_key, chain_code: c.chain_code }, "masterKey({})", c.seed);
+        assert_eq!(
+            node,
+            KeyNode {
+                chain_key: c.chain_key,
+                chain_code: c.chain_code
+            },
+            "masterKey({})",
+            c.seed
+        );
     }
     for c in from::<ChildKey>(&v, "childKey") {
-        let parent = KeyNode { chain_key: c.parent.chain_key, chain_code: c.parent.chain_code };
+        let parent = KeyNode {
+            chain_key: c.parent.chain_key,
+            chain_code: c.parent.chain_code,
+        };
         let child = child_key_derivation_hardened(&parent, c.index, HARDENED_OFFSET);
-        assert_eq!(child, KeyNode { chain_key: c.chain_key, chain_code: c.chain_code }, "childKey idx={}", c.index);
+        assert_eq!(
+            child,
+            KeyNode {
+                chain_key: c.chain_key,
+                chain_code: c.chain_code
+            },
+            "childKey idx={}",
+            c.index
+        );
     }
     for c in from::<SpendingKeyPairCase>(&v, "spendingKeyPair") {
-        let kp = WalletNode::from_mnemonic(&c.mnemonic, "").derive(&c.path).get_spending_key_pair();
-        assert_eq!(hex::encode(kp.private_key), c.private_key, "spending priv {}", c.path);
+        let kp = WalletNode::from_mnemonic(&c.mnemonic, "")
+            .derive(&c.path)
+            .get_spending_key_pair();
+        assert_eq!(
+            hex::encode(kp.private_key),
+            c.private_key,
+            "spending priv {}",
+            c.path
+        );
         assert_eq!(kp.pubkey, (dec(&c.x), dec(&c.y)), "spending pub {}", c.path);
     }
     for c in from::<ViewingKeyPairCase>(&v, "viewingKeyPair") {
-        let kp = WalletNode::from_mnemonic(&c.mnemonic, "").derive(&c.path).get_viewing_key_pair();
-        assert_eq!(hex::encode(kp.private_key), c.private_key, "viewing priv {}", c.path);
+        let kp = WalletNode::from_mnemonic(&c.mnemonic, "")
+            .derive(&c.path)
+            .get_viewing_key_pair();
+        assert_eq!(
+            hex::encode(kp.private_key),
+            c.private_key,
+            "viewing priv {}",
+            c.path
+        );
         assert_eq!(hex::encode(kp.pubkey), c.pubkey, "viewing pub {}", c.path);
     }
     for c in from::<NullifyingKey>(&v, "nullifyingKey") {
-        let nk = WalletNode::from_mnemonic(&c.mnemonic, "").derive(&c.path).get_nullifying_key();
+        let nk = WalletNode::from_mnemonic(&c.mnemonic, "")
+            .derive(&c.path)
+            .get_nullifying_key();
         assert_eq!(nk, dec(&c.out), "nullifyingKey {}", c.path);
     }
     for c in from::<Address>(&v, "address") {
-        let chain = c.chain.as_ref().map(|ch| Chain { chain_type: ch.chain_type, id: ch.id.parse().unwrap() });
+        let chain = c.chain.as_ref().map(|ch| Chain {
+            chain_type: ch.chain_type,
+            id: ch.id.parse().unwrap(),
+        });
         let data = AddressData {
             master_public_key: dec(&c.master_public_key),
             viewing_public_key: hex::decode(&c.viewing_public_key).unwrap(),

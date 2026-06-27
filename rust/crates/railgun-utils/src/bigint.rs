@@ -34,7 +34,10 @@ mod tests {
 
     #[test]
     fn min_works() {
-        assert_eq!(min_big_int(BigUint::from(3u8), BigUint::from(5u8)), BigUint::from(3u8));
+        assert_eq!(
+            min_big_int(BigUint::from(3u8), BigUint::from(5u8)),
+            BigUint::from(3u8)
+        );
     }
 
     #[test]

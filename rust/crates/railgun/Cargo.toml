@@ -1,0 +1,43 @@
+[package]
+name = "railgun"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Ready-to-use RAILGUN wallet framework — a unified API over the railgun-* crates with wallet management, chain sync, and balances. Network stays caller-injected (trait-only); spending requires a Groth16 backend (see railgun-prover)."
+
+[features]
+default = []
+# Pure-Rust Groth16 backend (ark-circom). Exposes `railgun::prover::ArkCircomBackend`.
+prover-arkcircom = ["railgun-prover/ark-circom"]
+# Offline test/dev ArtifactGetter that loads the repo's circuits.
+bundled-test-artifacts = ["railgun-prover/bundled-test-artifacts"]
+
+[dependencies]
+# Whole ecosystem, re-exported as `railgun::{wallet, crypto, ...}`.
+railgun-utils.workspace = true
+railgun-crypto.workspace = true
+railgun-key-derivation.workspace = true
+railgun-models.workspace = true
+railgun-db.workspace = true
+railgun-note.workspace = true
+railgun-merkletree.workspace = true
+railgun-solutions.workspace = true
+railgun-transaction.workspace = true
+railgun-poi.workspace = true
+railgun-prover.workspace = true
+railgun-contracts.workspace = true
+railgun-wallet.workspace = true
+railgun-engine.workspace = true
+
+thiserror.workspace = true
+num-bigint.workspace = true
+num-traits.workspace = true
+hex.workspace = true
+rmp-serde.workspace = true
+async-trait.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

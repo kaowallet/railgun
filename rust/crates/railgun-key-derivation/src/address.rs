@@ -131,7 +131,8 @@ mod tests {
     // src/key-derivation/__tests__/bech32-encode.test.ts
     fn addr_data(pubkey: &str, chain: Option<Chain>) -> AddressData {
         let mpk = hex_to_bigint(pubkey);
-        let vpk_hex = format_to_byte_length(&BytesData::Hex(pubkey.into()), ByteLength::Uint256, false);
+        let vpk_hex =
+            format_to_byte_length(&BytesData::Hex(pubkey.into()), ByteLength::Uint256, false);
         AddressData {
             master_public_key: mpk,
             viewing_public_key: hex_string_to_bytes(&vpk_hex).unwrap(),

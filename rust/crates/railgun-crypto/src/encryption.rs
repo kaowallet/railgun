@@ -109,8 +109,10 @@ pub fn encrypt_gcm(plaintext: &[String], key: &[u8]) -> Result<Ciphertext, Encry
 /// `AES.decryptGCM` — returns the per-chunk plaintext hex.
 pub fn decrypt_gcm(ciphertext: &Ciphertext, key: &[u8]) -> Result<Vec<String>, EncryptionError> {
     require_key(key)?;
-    let iv = hex_string_to_bytes(strip_0x(&ciphertext.iv)).map_err(|_| EncryptionError::InvalidHex)?;
-    let tag = hex_string_to_bytes(strip_0x(&ciphertext.tag)).map_err(|_| EncryptionError::InvalidHex)?;
+    let iv =
+        hex_string_to_bytes(strip_0x(&ciphertext.iv)).map_err(|_| EncryptionError::InvalidHex)?;
+    let tag =
+        hex_string_to_bytes(strip_0x(&ciphertext.tag)).map_err(|_| EncryptionError::InvalidHex)?;
     let iv = &iv[iv.len().saturating_sub(16)..];
     let tag = &tag[tag.len().saturating_sub(16)..];
     if iv.len() != 16 {
@@ -146,7 +148,8 @@ pub fn encrypt_ctr(plaintext: &[String], key: &[u8]) -> Result<CiphertextCtr, En
 /// `AES.decryptCTR`.
 pub fn decrypt_ctr(ciphertext: &CiphertextCtr, key: &[u8]) -> Result<Vec<String>, EncryptionError> {
     require_key(key)?;
-    let iv = hex_string_to_bytes(strip_0x(&ciphertext.iv)).map_err(|_| EncryptionError::InvalidHex)?;
+    let iv =
+        hex_string_to_bytes(strip_0x(&ciphertext.iv)).map_err(|_| EncryptionError::InvalidHex)?;
     if iv.len() != 16 {
         return Err(EncryptionError::InvalidIvLength(iv.len()));
     }
@@ -185,7 +188,10 @@ mod tests {
 
     #[test]
     fn ctr_roundtrip() {
-        let plaintext = vec!["deadbeef".to_string(), "00112233445566778899aabbccddeeff".to_string()];
+        let plaintext = vec![
+            "deadbeef".to_string(),
+            "00112233445566778899aabbccddeeff".to_string(),
+        ];
         let ct = encrypt_ctr(&plaintext, &key()).unwrap();
         assert_eq!(decrypt_ctr(&ct, &key()).unwrap(), plaintext);
     }

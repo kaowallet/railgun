@@ -5,6 +5,17 @@ members = [
     "crates/railgun-crypto",
     "crates/railgun-key-derivation",
     "crates/railgun-db",
+    "crates/railgun-models",
+    "crates/railgun-note",
+    "crates/railgun-merkletree",
+    "crates/railgun-solutions",
+    "crates/railgun-transaction",
+    "crates/railgun-poi",
+    "crates/railgun-prover",
+    "crates/railgun-contracts",
+    "crates/railgun-wallet",
+    "crates/railgun-engine",
+    "crates/railgun",
 ]
 
 [workspace.package]
@@ -23,6 +34,9 @@ authors = ["RAILGUN Contributors"]
 thiserror = "2"
 hex = "0.4"
 num-bigint = "0.4"
+num-integer = "0.1"
+num-traits = "0.2"
+async-trait = "0.1"
 
 # ---- hashes / symmetric (RustCrypto) ----
 sha2 = "0.10"
@@ -31,10 +45,14 @@ hmac = "0.12"
 aes-gcm = "0.10"
 aes = "0.8"
 ctr = "0.9"
+chacha20 = "0.9"
+chacha20poly1305 = "0.10"
 
 # ---- serialization ----
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# msgpack (== msgpack-lite on the TS side) for wallet DB blobs + shareable keys.
+rmp-serde = "1"
 
 # ---- ZK field + curve math (arkworks) ----
 # BabyJubJub (a.k.a. EdOnBN254) lives in ark-ed-on-bn254; its base field Fq is the
@@ -49,6 +67,11 @@ ark-serialize = "0.5"
 light-poseidon = "0.3"
 ark-bn254 = "0.5"
 
+# arnaucube's circom Poseidon (supports widths up to 16, i.e. >12 inputs, which
+# light-poseidon caps out at). Pulls its own arkworks 0.4 tree; we bridge via
+# decimal field-element strings and cross-validate against the small-width KAVs.
+poseidon-ark-no-std = "0.0.1"
+
 # original BLAKE-512 (the SHA-3 finalist, NOT BLAKE2) — required to match
 # circomlibjs eddsa.prv2pub private-key hashing byte-for-byte.
 blake = "2"
@@ -60,7 +83,28 @@ curve25519-dalek = "4"
 # ---- BIP39 mnemonics + bech32 addresses ----
 bip39 = { version = "2", features = ["rand"] }
 bech32 = "0.11"
+# secp256k1 public-key recovery for the EVM (0x) address helper.
+k256 = { version = "0.13", default-features = false, features = ["ecdsa", "arithmetic"] }
+
+# ---- EVM RPC + ABI (alloy = ethers-v6 successor) for railgun-contracts ----
+# Used for the sol! contract bindings (RelayAdapt/RailgunSmartWallet/V3) and the
+# ABI coder used in RelayAdapt adapt-params hashing + error parsing. Live RPC is
+# kept behind an injected EventProvider trait.
+alloy = { version = "1.8", default-features = false }
+tokio = { version = "1", default-features = false }
 
 # ---- internal crates ----
 railgun-utils = { path = "crates/railgun-utils" }
 railgun-crypto = { path = "crates/railgun-crypto" }
+railgun-models = { path = "crates/railgun-models" }
+railgun-key-derivation = { path = "crates/railgun-key-derivation" }
+railgun-db = { path = "crates/railgun-db" }
+railgun-note = { path = "crates/railgun-note" }
+railgun-merkletree = { path = "crates/railgun-merkletree" }
+railgun-solutions = { path = "crates/railgun-solutions" }
+railgun-transaction = { path = "crates/railgun-transaction" }
+railgun-poi = { path = "crates/railgun-poi" }
+railgun-prover = { path = "crates/railgun-prover" }
+railgun-contracts = { path = "crates/railgun-contracts" }
+railgun-wallet = { path = "crates/railgun-wallet" }
+railgun-engine = { path = "crates/railgun-engine" }
