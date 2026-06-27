@@ -1,0 +1,38 @@
+[package]
+name = "railgun-crypto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Cryptographic primitives for the RAILGUN engine (Poseidon, EdDSA-BabyJubJub, Ed25519, X25519, hashes), delegating to arkworks/RustCrypto/dalek."
+
+[dependencies]
+railgun-utils.workspace = true
+thiserror.workspace = true
+hex.workspace = true
+num-bigint.workspace = true
+
+sha2.workspace = true
+sha3.workspace = true
+hmac.workspace = true
+aes-gcm.workspace = true
+aes.workspace = true
+ctr.workspace = true
+serde.workspace = true
+
+ark-ff.workspace = true
+ark-ec.workspace = true
+ark-ed-on-bn254.workspace = true
+ark-serialize.workspace = true
+light-poseidon.workspace = true
+ark-bn254.workspace = true
+blake.workspace = true
+
+ed25519-dalek.workspace = true
+curve25519-dalek.workspace = true
+
+[dev-dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,28 @@
+[package]
+name = "railgun-key-derivation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "BIP39, custom BabyJubJub BIP32 derivation, wallet keys, and bech32m 0zk addresses (port of src/key-derivation/)."
+
+[dependencies]
+railgun-utils.workspace = true
+railgun-crypto.workspace = true
+thiserror.workspace = true
+hex.workspace = true
+num-bigint.workspace = true
+
+sha2.workspace = true
+hmac.workspace = true
+bip39.workspace = true
+bech32.workspace = true
+# standard secp256k1 BIP32 for the EVM (0x) key helper; renamed to avoid colliding
+# with our own `bip32` module (the custom BabyJubJub derivation).
+bip32-secp = { package = "bip32", version = "0.5" }
+
+[dev-dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

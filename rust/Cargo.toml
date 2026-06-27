@@ -1,0 +1,66 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/railgun-utils",
+    "crates/railgun-crypto",
+    "crates/railgun-key-derivation",
+    "crates/railgun-db",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT"
+repository = "https://github.com/kaowallet/railgun"
+authors = ["RAILGUN Contributors"]
+
+# A faithful Rust port of the RAILGUN engine TypeScript SDK.
+# Crypto is delegated to existing, audited crates (arkworks, RustCrypto, dalek).
+# See PORT_PLAN.md for the dependency-ordered roadmap.
+[workspace.dependencies]
+# ---- error handling / misc ----
+thiserror = "2"
+hex = "0.4"
+num-bigint = "0.4"
+
+# ---- hashes / symmetric (RustCrypto) ----
+sha2 = "0.10"
+sha3 = "0.10"
+hmac = "0.12"
+aes-gcm = "0.10"
+aes = "0.8"
+ctr = "0.9"
+
+# ---- serialization ----
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# ---- ZK field + curve math (arkworks) ----
+# BabyJubJub (a.k.a. EdOnBN254) lives in ark-ed-on-bn254; its base field Fq is the
+# BN254 scalar field == RAILGUN's SNARK_PRIME.
+ark-ff = "0.5"
+ark-ec = "0.5"
+ark-ed-on-bn254 = "0.5"
+ark-serialize = "0.5"
+
+# circom-compatible Poseidon over BN254 (audited by Veridise). We consume only its
+# canonical byte output, so its internal arkworks version is decoupled from ours.
+light-poseidon = "0.3"
+ark-bn254 = "0.5"
+
+# original BLAKE-512 (the SHA-3 finalist, NOT BLAKE2) — required to match
+# circomlibjs eddsa.prv2pub private-key hashing byte-for-byte.
+blake = "2"
+
+# ---- ed25519 / curve25519 (dalek) for viewing keys + ECDH ----
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+curve25519-dalek = "4"
+
+# ---- BIP39 mnemonics + bech32 addresses ----
+bip39 = { version = "2", features = ["rand"] }
+bech32 = "0.11"
+
+# ---- internal crates ----
+railgun-utils = { path = "crates/railgun-utils" }
+railgun-crypto = { path = "crates/railgun-crypto" }
